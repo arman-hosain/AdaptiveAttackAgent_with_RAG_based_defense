@@ -5,7 +5,7 @@ import numpy as np
 
 
 class RagDefense:
-    def __init__(self, index_path="malicious_index.json", model_name="all-MiniLM-L6-v2"):
+    def __init__(self, index_path="InjecAgent/data/malicious_index.json", model_name="all-MiniLM-L6-v2"):
         # Load malicious prompt list
         with open(index_path, "r") as f:
             self.malicious_data = json.load(f)
