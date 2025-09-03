@@ -8,6 +8,7 @@ from InjecAgent.src.prompts.llm_paraphrasing import LLM_PARAPHRASING_PROMPT
 import jinja2
 import logging
 from data_processing.utils import get_tool_response_with_placeholder, get_case, get_case_multi_objective, get_case_finetuned_detector
+from data_processing.rag_defense import RagDefense
 
 # load template from InjecAgent.src.prompts.jinja.llama_tool_use.jinja
 env = jinja2.Environment(loader=jinja2.FileSystemLoader('./InjecAgent/src/prompts/jinja'))
@@ -100,12 +101,47 @@ def get_one_case_paraphrase_step_2(params, item, tool_dict):
     paraphrasing_model_input = llama3_template.format(user_prompt = filled_paraphrasing_prompt)
     return get_case(item, paraphrasing_model_input, '\n\n' + item['Attacker Input'])
 
+def get_one_case_rag_defense(params, item, tool_dict):
+    """RAG-based defense: check attacker input against malicious prompt index."""
+
+    rag_checker = RagDefense(index_path=params.get("rag_index", "malicious_index.json"))
+
+    # Attacker’s tool response
+    tool_response = get_tool_response_with_placeholder(item, params['adv_string_position'])
+
+    # Check maliciousness
+    if rag_checker.is_malicious(tool_response):
+        # Replace with a neutral response
+        safe_response = "[Filtered: Malicious content detected]"
+    else:
+        safe_response = tool_response
+
+    # Normal agent prompt construction
+    available_tool_names = [item['User Tool']] + item['Attacker Tools']
+    available_tool_descriptions = json.dumps(
+        [tool_dict[tool] for tool in available_tool_names], indent=True
+    )
+
+    user_instruction = item['User Instruction']
+
+    model_input = agent_template.render(
+        available_tool_descriptions=available_tool_descriptions,
+        user_instruction=user_instruction,
+        call_of_user_tool=call_tool_template.render(
+            tool_name=item['User Tool'], tool_parameters=item['Tool Parameters']
+        ),
+        response_of_user_tool=safe_response,
+    )
+
+    return get_case(item, model_input, '\n\n{"name": "' + item['Attacker Tools'][0] + '",')
+
 DEFENSE_METHODS = {
     "Paraphrasing": get_one_case_no_defense,
     "Paraphrasing_step_2": get_one_case_paraphrase_step_2,
     "InstructionalPrevention": get_one_case_instructional_prevention,
     "LLMDetector": predict_one_case_llm_detector,
-    "FinetunedDetector": predict_one_case_finetuned_detector
+    "FinetunedDetector": predict_one_case_finetuned_detector,
+    "RAGDefense": get_one_case_rag_defense
 }
 def get_training_data_llama3(params, input_files, data_output_file = None):
     if params['defense'] == 'Paraphrasing' and 'step_2' in data_output_file:
