@@ -9,6 +9,7 @@ from InjecAgent.src.prompts.llm_detector import LLM_DETECTOR_PROMPT, LLM_DETECTO
 from InjecAgent.src.prompts.llm_paraphrasing import LLM_PARAPHRASING_PROMPT
 from InjecAgent.src.output_parsing import evaluate_output_fineutned_llama
 from InjecAgent.src.models import MODELS
+from data_processing.rag_defense import RagDefense
 import torch
 from transformers import pipeline
 import openai
@@ -195,13 +196,57 @@ def predict_one_case_finetuned_detector(params, item, model_class, tool_dict, de
     output = model_class.call_model(model_input)
     return {"output": output, "Detector Results": results}
 
+def predict_one_case_rag_defense(params, item, model_class, tool_dict, step_2=False):
+    """
+    RAG-based defense: check attacker tool response against malicious index.
+    If malicious, replace with a safe placeholder.
+    """
+    rag_checker = RagDefense(index_path=params.get("rag_index", "./InjecAgent/data/malicious_index.json"))
+
+    # Attacker's raw tool response
+    attacker_response = item['Tool Response']
+
+    # Run RAG maliciousness check
+    if rag_checker.is_malicious(attacker_response, threshold=params.get("threshold", 0.5)):
+        safe_response = "[Filtered: Malicious content detected]"
+    else:
+        safe_response = attacker_response
+
+    # Build agent input with Jinja template
+    available_tool_names = [item['User Tool']] + item['Attacker Tools']
+    available_tool_descriptions = json.dumps([tool_dict[tool] for tool in available_tool_names], indent=True)
+
+    user_instruction = item['User Instruction']
+
+    model_input = agent_template.render(
+        available_tool_descriptions=available_tool_descriptions,
+        user_instruction=user_instruction,
+        call_of_user_tool=call_tool_template.render(
+            tool_name=item['User Tool'], tool_parameters=item['Tool Parameters']
+        ),
+        response_of_user_tool=safe_response,
+    )
+
+    # Optionally append attacker tool call in step_2 phase
+    if step_2:
+        model_input += tool_response_template.render(
+            call_of_tool=call_tool_template.render(
+                tool_name=item['Attacker Tools'][0], tool_parameters=item['Attacker Tool Parameters']
+            ),
+            response_of_tool=safe_response,
+        )
+
+    output = model_class.call_model(model_input)
+    return {"output": output}
+
 DEFENSE_METHODS = {
     "None": predict_one_case_no_defense,
     "InstructionalPrevention": predict_one_case_instructional_prevention,
     "LLMDetector": predict_one_case_llm_detector,
     "PerplexityFiltering": predict_one_case_perplexity_filtering,
     "FinetunedDetector": predict_one_case_finetuned_detector,
-    'Paraphrasing': predict_one_case_paraphrasing
+    'Paraphrasing': predict_one_case_paraphrasing,
+    "RAGDefense": predict_one_case_rag_defense
 }
 
 

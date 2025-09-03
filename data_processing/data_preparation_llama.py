@@ -104,7 +104,7 @@ def get_one_case_paraphrase_step_2(params, item, tool_dict):
 def get_one_case_rag_defense(params, item, tool_dict):
     """RAG-based defense: check attacker input against malicious prompt index."""
 
-    rag_checker = RagDefense(index_path=params.get("rag_index", "malicious_index.json"))
+    rag_checker = RagDefense(index_path=params.get("rag_index", "./InjecAgent/data/malicious_index.json"))
 
     # Attacker’s tool response
     tool_response = get_tool_response_with_placeholder(item, params['adv_string_position'])
