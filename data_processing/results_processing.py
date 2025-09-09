@@ -80,8 +80,14 @@ def extract_adv_string(file_prefix, config, adv_string_result_dir, data_setting=
         all_losses.append(min_loss)
     output_file_name_dh = f"./InjecAgent/adaptive_attack_results/{file_prefix}_dh_data.json"
     output_file_name_ds = f"./InjecAgent/adaptive_attack_results/{file_prefix}_ds_data.json"
-    json.dump(list(dh_case_dict.values()), open(output_file_name_dh, 'w'), indent=4)
-    json.dump(list(ds_case_dict.values()), open(output_file_name_ds, 'w'), indent=4)
+    # json.dump(list(dh_case_dict.values()), open(output_file_name_dh, 'w'), indent=4)
+    # json.dump(list(ds_case_dict.values()), open(output_file_name_ds, 'w'), indent=4)
+    os.makedirs("./InjecAgent/adaptive_attack_results", exist_ok=True)
+    with open(output_file_name_dh, "w") as f:
+        json.dump(list(dh_case_dict.values()), f, indent=4)
+
+    with open(output_file_name_ds, "w") as f:
+        json.dump(list(ds_case_dict.values()), f, indent=4)
 
     logging.info(f"Write results to {output_file_name_dh} and {output_file_name_ds}")
     logging.info(f"Extracted {cnt_dh} dh cases and {cnt_ds} ds cases")
