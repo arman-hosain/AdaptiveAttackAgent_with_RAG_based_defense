@@ -2,7 +2,7 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 
 class RagDefense:
-    def __init__(self, index_path="InjecAgent/data/malicious_index.json", model_name="all-MiniLM-L6-v2"):
+    def __init__(self, index_path="InjecAgent/data/malicious_index.json", model_name="sentence-transformers/all-MiniLM-L6-v2"):
         import json
 
         with open(index_path, "r") as f:
