@@ -14,6 +14,7 @@ class BaseGCG():
         pass
    
     def compute_candidates_loss(self, search_batch_size, input_embeds, target_ids, prefix_cache=None):
+        torch.cuda.empty_cache()
         if self.search_batch_size != search_batch_size:
             logging.info(f"Setting candidates search_batch_size to {search_batch_size})")
             self.search_batch_size = search_batch_size
