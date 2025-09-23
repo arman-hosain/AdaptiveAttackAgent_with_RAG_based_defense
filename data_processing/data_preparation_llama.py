@@ -104,17 +104,17 @@ def get_one_case_paraphrase_step_2(params, item, tool_dict):
 def get_one_case_rag_defense(params, item, tool_dict):
     """RAG-based defense: check attacker input against malicious prompt index."""
 
-    rag_checker = RagDefense(index_path=params.get("rag_index", "./InjecAgent/data/malicious_index.json"))
+    rag_checker = RagDefense()
+
+    # Check maliciousness
+    if rag_checker.is_malicious(item['Attacker Instruction']):
+        # Replace with a neutral response
+        item['Attacker Instruction'] = "[Filtered: Malicious content detected]"
+
 
     # Attacker’s tool response
     tool_response = get_tool_response_with_placeholder(item, params['adv_string_position'])
 
-    # Check maliciousness
-    if rag_checker.is_malicious(tool_response):
-        # Replace with a neutral response
-        safe_response = "[Filtered: Malicious content detected]"
-    else:
-        safe_response = tool_response
 
     # Normal agent prompt construction
     available_tool_names = [item['User Tool']] + item['Attacker Tools']
@@ -130,7 +130,7 @@ def get_one_case_rag_defense(params, item, tool_dict):
         call_of_user_tool=call_tool_template.render(
             tool_name=item['User Tool'], tool_parameters=item['Tool Parameters']
         ),
-        response_of_user_tool=safe_response,
+        response_of_user_tool=tool_response,
     )
 
     return get_case(item, model_input, '\n\n{"name": "' + item['Attacker Tools'][0] + '",')
