@@ -201,13 +201,13 @@ def predict_one_case_rag_defense(params, item, model_class, tool_dict, step_2=Fa
     RAG-based defense: check attacker tool response against malicious index.
     If malicious, replace with a safe placeholder.
     """
-    rag_checker = RagDefense(index_path=params.get("rag_index", "./InjecAgent/data/malicious_index.json"))
+    rag_checker = RagDefense()
 
     # Attacker's raw tool response
     attacker_response = item['Tool Response']
 
     # Run RAG maliciousness check
-    if rag_checker.is_malicious(attacker_response, threshold=params.get("threshold", 0.5)):
+    if rag_checker.is_malicious(attacker_response, threshold=1.0):
         safe_response = "[Filtered: Malicious content detected]"
     else:
         safe_response = attacker_response
