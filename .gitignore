@@ -5,4 +5,4 @@
 /InjecAgent/adaptive_attack_results/
 __pycache__/
 /.idea/
-chroma_db/
+/chroma_db/
