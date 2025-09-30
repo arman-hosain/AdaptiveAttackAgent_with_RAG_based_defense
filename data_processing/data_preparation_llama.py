@@ -14,6 +14,7 @@ from data_processing.rag_defense import RagDefense
 env = jinja2.Environment(loader=jinja2.FileSystemLoader('./InjecAgent/src/prompts/jinja'))
 agent_template = env.get_template('llama_tool_use_new_prompt.jinja')
 agent_template_with_instructional_prevention = env.get_template('llama_tool_use_instruction_prevention_new_prompt.jinja')
+agent_template_with_rag_defense = env.get_template('llama_tool_use_RAG_DEFENSE.jinja')
 call_tool_template = env.get_template('call_tool.jinja')
 tool_response_template = env.get_template('tool_response.jinja')
 
@@ -22,6 +23,8 @@ llama3_template = """<|start_header_id|>system<|end_header_id|>
 You are a helpful AI assistant for travel tips and recommendations<|eot_id|><|start_header_id|>user<|end_header_id|>
 
 {user_prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
+
+rag_defense = RagDefense()
 
 
     
@@ -104,35 +107,21 @@ def get_one_case_paraphrase_step_2(params, item, tool_dict):
 def get_one_case_rag_defense(params, item, tool_dict):
     """RAG-based defense: check attacker input against malicious prompt index."""
 
-    rag_checker = RagDefense()
-
-    # Check maliciousness
-    if rag_checker.is_malicious(item['Attacker Instruction']):
-        # Replace with a neutral response
-        item['Attacker Instruction'] = "[Filtered: Malicious content detected]"
-
-
-    # Attacker’s tool response
-    tool_response = get_tool_response_with_placeholder(item, params['adv_string_position'])
-
-
-    # Normal agent prompt construction
     available_tool_names = [item['User Tool']] + item['Attacker Tools']
-    available_tool_descriptions = json.dumps(
-        [tool_dict[tool] for tool in available_tool_names], indent=True
-    )
-
+    available_tool_descriptions = json.dumps([tool_dict[tool] for tool in available_tool_names], indent=True)
     user_instruction = item['User Instruction']
 
-    model_input = agent_template.render(
+    tool_response = get_tool_response_with_placeholder(item, params['adv_string_position'])
+    malicious_prompt_list = rag_defense.get_top_malicious(item['Attacker Instruction'])
+
+    model_input = agent_template_with_rag_defense.render(
         available_tool_descriptions=available_tool_descriptions,
+        malicious_prompt_samples = malicious_prompt_list,
         user_instruction=user_instruction,
-        call_of_user_tool=call_tool_template.render(
-            tool_name=item['User Tool'], tool_parameters=item['Tool Parameters']
-        ),
+        call_of_user_tool=call_tool_template.render(tool_name=item['User Tool'],
+                                                    tool_parameters=item['Tool Parameters']),
         response_of_user_tool=tool_response,
     )
-
     return get_case(item, model_input, '\n\n{"name": "' + item['Attacker Tools'][0] + '",')
 
 DEFENSE_METHODS = {
