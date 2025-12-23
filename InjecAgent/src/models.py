@@ -3,41 +3,51 @@ from InjecAgent.src.utils import get_response_text
 import time
 import transformers
 import torch
+
 transformers.set_seed(42)
+
+
 class BaseModel:
     def __init__(self):
         self.model = None
 
-    def prepare_input(self, sys_prompt,  user_prompt_filled):
+    def prepare_input(self, sys_prompt, user_prompt_filled):
         raise NotImplementedError("This method should be overridden by subclasses.")
 
     def call_model(self, model_input):
         raise NotImplementedError("This method should be overridden by subclasses.")
 
+
 class LlamaToolUseModel(BaseModel):
     def __init__(self, params):
-        super().__init__()  
-        
+        super().__init__()
+
         tokenizer = transformers.AutoTokenizer.from_pretrained(params['model_name'])
-        self.tokenizer = tokenizer  
+        self.tokenizer = tokenizer
+
+        # --- FIX START ---
+        # 1. Load the model explicitly with the correct attention implementation.
+        # This prevents "ValueError: model_kwargs are not used by the model"
+        self.model = transformers.AutoModelForCausalLM.from_pretrained(
+            params['model_name'],
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            attn_implementation="sdpa"
+        )
+        self.model.eval()
+
+        # 2. Initialize the pipeline using the ALREADY LOADED model.
+        # We removed 'attn_implementation' and 'temperature' from here.
         self.pipeline = transformers.pipeline(
             "text-generation",
-            model=params['model_name'],
+            model=self.model,  # Pass the object, not the name
             tokenizer=tokenizer,
-            model_kwargs={"torch_dtype": torch.bfloat16},
-            device_map="auto",
-            # max_length=4096,
             max_new_tokens=512,
             do_sample=False,
-            temperature=0,
+            # temperature=0, # Removed to fix UserWarning since do_sample=False
         )
-        if params['defense'] == 'PerplexityFiltering':
-            self.model = transformers.AutoModelForCausalLM.from_pretrained(
-                params['model_name'], 
-                torch_dtype=torch.bfloat16,
-                device_map="auto"
-            )
-            self.model.eval()
+        # --- FIX END ---
+
         self.params = params
         self.template = """<|start_header_id|>system<|end_header_id|>
 
@@ -48,33 +58,36 @@ You are a helpful AI assistant for travel tips and recommendations<|eot_id|><|st
     def call_model(self, model_input):
         output = self.pipeline(model_input)
         return get_response_text(output, model_input)
-    
 
-class VicunaModel(BaseModel):     
+
+class VicunaModel(BaseModel):
     def __init__(self, params):
-        super().__init__()          
+        super().__init__()
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(params['model_name'], use_fast=False)
         self.dropout = False
         if params['defense'] == 'ReTokenization':
             self.dropout = True
             print("Using BPE-dropout tokenizer")
-            self.tokenizer_dropout = transformers.AutoTokenizer.from_pretrained(params['model_name'], use_fast=False, sp_model_kwargs={"enable_sampling": True, "alpha": 0.4})
+            self.tokenizer_dropout = transformers.AutoTokenizer.from_pretrained(params['model_name'], use_fast=False,
+                                                                                sp_model_kwargs={
+                                                                                    "enable_sampling": True,
+                                                                                    "alpha": 0.4})
             self.model = transformers.AutoModelForCausalLM.from_pretrained(
-                params['model_name'], 
+                params['model_name'],
                 torch_dtype=torch.bfloat16,
                 device_map="auto"
             )
             self.model.eval()
-            self.max_length = 4096  
-            
+            self.max_length = 4096
+
         if params['defense'] == 'PerplexityFiltering':
             self.model = transformers.AutoModelForCausalLM.from_pretrained(
-                params['model_name'], 
+                params['model_name'],
                 torch_dtype=torch.bfloat16,
                 device_map="auto"
             )
             self.model.eval()
-            
+
         if params['defense'] != 'ReTokenization':
             self.pipeline = transformers.pipeline(
                 "text-generation",
@@ -96,20 +109,21 @@ class VicunaModel(BaseModel):
         if self.dropout:
             parts = model_input.split(tool_response)
             tokenized_parts = []
-            
+
             for i, part in enumerate(parts):
                 tokenized_part = self.tokenizer(part, return_tensors="pt", add_special_tokens=(i == 0))
                 tokenized_parts.append(tokenized_part["input_ids"])
-                
+
                 if i < len(parts) - 1:
-                    tool_response_tokenized = self.tokenizer_dropout(tool_response, return_tensors="pt", add_special_tokens=False)
+                    tool_response_tokenized = self.tokenizer_dropout(tool_response, return_tensors="pt",
+                                                                     add_special_tokens=False)
                     tokenized_parts.append(tool_response_tokenized["input_ids"])
-            
+
             # Concatenate all tokenized parts
             concatenated_input_ids = torch.cat(tokenized_parts, dim=-1)
-            
+
             attention_mask = torch.ones_like(concatenated_input_ids)
-            
+
             # Move input to the correct device
             concatenated_input_ids = concatenated_input_ids.to(self.model.device)
             attention_mask = attention_mask.to(self.model.device)
@@ -120,17 +134,17 @@ class VicunaModel(BaseModel):
                 max_length=self.max_length,
                 do_sample=False
             )
-            
+
             # Decode the output tokens
             output_text = self.tokenizer.decode(output_tokens[0], skip_special_tokens=True)
-                
+
             return get_response_text([{"generated_text": output_text}], "ASSISTANT:")
         else:
             output = self.pipeline(model_input)
             return get_response_text(output, "ASSISTANT:")
-           
+
 
 MODELS = {
     "Vicuna": VicunaModel,
     "Llama3": LlamaToolUseModel,
-}   
+}

@@ -9,6 +9,7 @@ import jinja2
 import logging
 from data_processing.utils import get_tool_response_with_placeholder, get_case, get_case_multi_objective, get_case_finetuned_detector
 from data_processing.rag_defense import RagDefense
+import torch
 
 # load template from InjecAgent.src.prompts.jinja.llama_tool_use.jinja
 env = jinja2.Environment(loader=jinja2.FileSystemLoader('./InjecAgent/src/prompts/jinja'))
@@ -104,12 +105,12 @@ def get_one_case_paraphrase_step_2(params, item, tool_dict):
 def get_one_case_rag_defense(params, item, tool_dict):
     """RAG-based defense: check attacker input against malicious prompt index."""
 
-    rag_checker = RagDefense()
-
-    # Check maliciousness
-    if rag_checker.is_malicious(item['Attacker Instruction']):
-        # Replace with a neutral response
-        item['Attacker Instruction'] = "[Filtered: Malicious content detected]"
+    # rag_checker = RagDefense()
+    #
+    # # Check maliciousness
+    # if rag_checker.is_malicious(item['Attacker Instruction']):
+    #     # Replace with a neutral response
+    #     item['Attacker Instruction'] = "[Filtered: Malicious content detected]"
 
 
     # Attacker’s tool response

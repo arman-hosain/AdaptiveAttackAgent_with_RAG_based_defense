@@ -10,6 +10,7 @@ from InjecAgent.src.prompts.llm_paraphrasing import LLM_PARAPHRASING_PROMPT
 from InjecAgent.src.output_parsing import evaluate_output_fineutned_llama
 from InjecAgent.src.models import MODELS
 from data_processing.rag_defense import RagDefense
+from data_processing.agentic_guardrail import build_agent, guard_prompt
 import torch
 from transformers import pipeline
 import openai
@@ -201,16 +202,14 @@ def predict_one_case_rag_defense(params, item, model_class, tool_dict, step_2=Fa
     RAG-based defense: check attacker tool response against malicious index.
     If malicious, replace with a safe placeholder.
     """
-    rag_checker = RagDefense()
+    agent = build_agent()
 
     # Attacker's raw tool response
     attacker_response = item['Tool Response']
 
-    # Run RAG maliciousness check
-    if rag_checker.is_malicious(attacker_response, threshold=1.0):
-        safe_response = "[Filtered: Malicious content detected]"
-    else:
-        safe_response = attacker_response
+    response_object = agent.run(guard_prompt.format(query=attacker_response))
+    safe_response = response_object.content
+    print(safe_response)
 
     # Build agent input with Jinja template
     available_tool_names = [item['User Tool']] + item['Attacker Tools']
