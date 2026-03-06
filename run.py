@@ -115,11 +115,18 @@ if __name__ == '__main__':
         os.makedirs('./data')
     # Configure logging once in a.py
     logging.basicConfig(
-        filename=f"./logs/{current_time}.log",  # Log to a file
         level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s"
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(f"./logs/{current_time}.log"),  # Save to file
+            logging.StreamHandler()  # Also print to terminal
+        ],
+        force=True  # <--- CRITICAL: Overrides any logging set by imported libraries
     )
-    print(f"Logging to {logging.getLogger().handlers[0].baseFilename}")
+    # 3. Safe filename retrieval
+    log_file = next((h.baseFilename for h in logging.getLogger().handlers if hasattr(h, 'baseFilename')), "None")
+    print(f"Logging to: {log_file}", flush=True)
+
     logging.info(f"Arguments: {args}")
     
     base_model = args.model.split('/')[-1]

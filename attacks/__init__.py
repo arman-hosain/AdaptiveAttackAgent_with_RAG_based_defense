@@ -4,6 +4,7 @@ _method_mapping = {
     "GCG": "attacks.gcg", 
     "MGCG_ST": "attacks.multi_gcg_same_tokenizer",
     "MGCG_DT": "attacks.multi_gcg_different_tokenizer",
+    "AutoDAN": "attacks.autodan",
 }
 
 def get_method_class(method):
